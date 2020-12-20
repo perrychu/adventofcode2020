@@ -722,12 +722,12 @@ for c in cases:
     match, remainders = check_rule("0",c)
     if match and min(len(x) for x in remainders) == 0:
         count += 1
-    print (c, match, remainders)
+    # print (c, match, remainders)
 
 print("part 1:",count, "\n")
     
 
-rule_dict["8"] = [("42"),("42","8")]
+rule_dict["8"] = [("42",),("42","8")]
 rule_dict["11"] = [("42","31"),("42","11","31")]
 
 # for k in sorted(rule_dict.keys(), key=lambda x:int(x)):
@@ -738,5 +738,5 @@ for c in cases:
     match, remainders = check_rule("0",c)
     if match and min(len(x) for x in remainders) == 0:
         count += 1
-    print (c, match, remainders)
+    # print (c, match, remainders)
 print("part 2:",count)
