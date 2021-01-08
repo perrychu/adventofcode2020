@@ -1838,15 +1838,20 @@ Tile 1259:
 # ..#.......
 # ..#.###...'''
 
+import math
+import numpy as np
 
 l = s.split("\n\n")
 
-image_dict = {}
+tile_dict = {}
+edge_dict = {}
 names = []
 for image in l:
     rows = image.splitlines()
     name = rows[0][5:-1]
     
+    tile_dict[name] = np.array([[c for c in row] for row in rows[1:]])
+
     top = []
     left = []
     right = []
@@ -1864,22 +1869,26 @@ for image in l:
                 right.append(char)
 
     names.append(name)
-    image_dict[name] = [top,bottom,left,right]
-
-match_dict = {n:[] for n in names}
+    edge_dict[name] = [top,right,bottom,left]
 
 def check_match(n1,n2):
-    for e1 in image_dict[n1]:
-        for e2 in image_dict[n2]:
-            if e1 == e2 or e1 == list(reversed(e2)):
-                return True
-    return False
+    for i,e1 in enumerate(edge_dict[n1], start=1):
+        for j,e2 in enumerate(edge_dict[n2], start=1):
+            if e1 == e2:
+                return (i,j)
+            elif e1 == list(reversed(e2)):
+                return (i,-j)
+    return None
+
+names.sort()
+match_dict = {n:[] for n in names}
 
 for i,n1 in enumerate(names):
     for j,n2 in enumerate(names[i+1:]):
-        if check_match(n1,n2):
-            match_dict[n1].append(n2)
-            match_dict[n2].append(n1)
+        val = check_match(n1,n2)
+        if val is not None:
+            match_dict[n1].append((n2,val))
+            match_dict[n2].append((n1,val))
 
 corners = []
 product = 1
@@ -1889,4 +1898,179 @@ for k in sorted(match_dict.keys()):
         print(k)
         corners.append(k)
         product *= int(k)
-print("Part 1:", product)
+print("Part 1:")
+print(product)
+print()
+
+
+def get_matched_sides(tile, match_dict):
+    sides = []
+    for match in match_dict[tile]:
+        if tile < match[0]:
+            sides.append(match[1][0])
+        else:
+            sides.append(match[1][1])
+    return sorted(sides)
+
+def get_matching_names(tile, match_dict):
+    return set(x[0] for x in match_dict[tile])
+
+def get_rotations(image_array):
+    rotations = []
+    for i in range(4):
+        x = np.rot90(image_array,i)
+        y = np.fliplr(x)
+        rotations.append(x)
+        rotations.append(y)
+    return rotations
+
+def get_edge(image_array, side):
+    if side == "r":
+        return image_array[:,-1]
+    elif side == "l":
+        return image_array[:,0]
+    elif side == "t":
+        return image_array[0,:]
+    elif side == "b":
+        return image_array[-1,:]
+    else:
+        raise NotImplementedError
+
+def opp_side(side):
+    if side == "r":
+        return "l"
+    elif side == "l":
+        return "r"
+    elif side == "t":
+        return "b"
+    elif side == "b":
+        return "t"
+    else:
+        raise NotImplementedError
+
+def find_match(tile, side, options):
+    edge = get_edge(tile_dict[tile], side)
+
+    # print('find_match')
+    # print(tile)
+    for o in options:
+        # print(o)
+        for r in get_rotations(tile_dict[o]):
+            r_edge = get_edge(r,opp_side(side))
+            # print(edge,r_edge)
+            if np.array_equal(edge,r_edge):
+                return o, r
+    
+    raise NotImplementedError
+
+monster = '''                  # 
+#    ##    ##    ###
+ #  #  #  #  #  #   '''
+
+monster_coords = []
+for y,r in enumerate(monster.splitlines()):
+    for x,c in enumerate(r):
+        if c == "#":
+            monster_coords.append((x,y))
+
+print(monster_coords)
+
+def check_monster(image):
+    y,x = image.shape
+    if x < 20 or y < 3:
+        return 0
+    if all(image[y,x] == "#" for x,y in monster_coords):
+        return 1
+    return 0
+
+def print_image(image):
+    for r in image:
+        print("".join(r))
+
+# Orient first corner tile to bottom left corner (matches on top / right)
+sides = get_matched_sides(corners[0],match_dict)
+
+if sides == [2,3]:
+    tile_dict[corners[0]] = np.rot90(tile_dict[corners[0]])
+elif sides == [3,4]:
+    tile_dict[corners[0]] = np.rot90(tile_dict[corners[0]],2)
+elif sides == [1,4]:
+    tile_dict[corners[0]] = np.rot90(tile_dict[corners[0]],-1)
+
+
+dim = int(math.sqrt(len(l)))
+placed = set()
+rows = []
+
+# Match bottom row left to right
+curr = corners[0]
+placed.add(corners[0])
+row = [corners[0]]
+
+for i in range(dim-1):
+    options = get_matching_names(curr, match_dict).difference(placed)
+    name, tile = find_match(curr, "r", options)
+    tile_dict[name] = tile
+    placed.add(name)
+    row.append(name)
+    curr = name
+
+rows.append(row)
+print(row)
+
+# Match rows bottom to top
+for r in range(dim-1):
+    row = []
+    for i,c in enumerate(range(dim)):
+        curr = rows[-1][i]
+        options = get_matching_names(curr, match_dict).difference(placed)
+        name, tile = find_match(curr, "t", options)
+        tile_dict[name] = tile
+        placed.add(name)
+        row.append(name)
+    rows.append(row)
+
+rows.reverse()
+print(rows)
+
+#Consolidate image and remove borders
+image_rows = []
+for r in rows:
+    x = np.concatenate([tile_dict[x] for x in r],axis=1)
+    image_rows.append(x)
+image = np.concatenate(image_rows,axis=0)
+
+y,x = image.shape
+ys = [i for i in range(image.shape[0]) if i % 10 == 0 or i % 10 == 9]
+xs = [i for i in range(image.shape[1]) if i % 10 == 0 or i % 10 == 9]
+
+image = np.delete(image,ys,axis=0)
+image = np.delete(image,xs,axis=1)
+
+print(image.shape)
+# print_image(image)
+hashes = (image == "#").sum()
+print(hashes, "total hashes")
+
+for r in get_rotations(image):
+    print("***")
+    # print_image(r)
+
+    y,x = r.shape
+    count = 0
+    for i in range(y):
+        for j in range(x):
+            result = check_monster(r[i:,j:])
+            count += result
+            if result > 0:
+                print(i,j)
+    if count > 0:
+        print()
+        print("Part 2:")
+        print(count, "monsters", 15*count, "monster hashes", hashes - 15*count, "non monster hashes")
+        print()
+
+
+
+
+
